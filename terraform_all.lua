@@ -1,0 +1,728 @@
+Terraform:- 
+----------
+
+terraform is an infrastructure as code (IAC) tool that allows you to build, change, and version infrastructure safely and efficiently.
+
+
+
+we have two types of deployments those are static deployment , dynamic deployment.
+
+static means using hardcoded values in the script it can able to use one time only..
+
+but dynamic deployment here we just mention the variables , this  file will use multiple times.
+
+
+
+terraform init = initilise the terraform and download the providers agent in local mechine
+
+create a .terraform folder in workspace.
+
+
+terraform plan =  it is a simulation , what will happening .
+
+terraform apply = initiate the deployment, create state file to maintain the records "terraform.tfstate" and "terraform.tfstate.backup"
+
+terraform apply --auto-approve 
+
+
+
+
+installation :-
+
+download the terraform from the website
+
+
+setup the environment variables
+
+
+components and terminology :-
+----------------------------
+
+1. providers
+
+2. resources
+
+3. variables
+
+4. statefile
+
+5. provisioners
+
+6. backend
+
+7. modules
+
+8. data sources
+
+9. service principals
+
+---------------------------------------------------------------------------------------------------------------------------
+
+1. providers :-
+--------------
+
+terraform relies on plugins called prividers to interact with cloud prividers , saas providers, and other APIs.
+
+
+
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+# Configure the AWS Provider
+provider "aws" {
+  region = "us-east-1"
+}
+
+
+provider "aws" {
+  region     = "us-west-2"
+  access_key = "my-access-key"
+  secret_key = "my-secret-key"
+}
+
+
+------------------------------------------------------------------------------------------------------------------
+
+
+2. resources:-
+-------------
+resources are the most important element in the terraform language. each resource block describes one or more infrastructure objects, such as vpc, ce2, or high-level components such as DNS recors.
+
+
+
+
+resource "aws_instance" "web" {
+  ami           = "ami-a1b2c3d4"
+  instance_type = "t2.micro"
+}
+
+--------------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+3. variables:-  (dynamic deployments)  variable.tf
+--------------
+
+using variables in terraform configurations makes our deployment more dynamic.
+
+a separate file with name "variable.tf" needs to be created in the working directory to store all variables for our used in main.tf configuration file.
+
+files like 
+
+
+main.tf = providers
+
+variable.tf = make a variables
+
+terraform.tfvars = variable values (here we can change the values for multiple deployments.)
+
+-----------------------------------------------------------------------------------------------------------------------------------------
+
+
+
+4. statefile :-
+--------------
+after the deployment is finished terraform creates a state file to keep track of current state of the infrastructure.
+
+it will use this file to compare when you deploy/destroy resources in other words it compares "current state" with "desird state" using this file.
+
+a file with a name of "terraform.tfstate" will be created in your working directory.
+
+state file maintain the current state of infrastructure.
+
+state file commonly delete and currepting, for that resoun we maintaine remotely.
+
+
+restoring statefile:-
+--------------------
+if the statefile is delete or corrupted, we can restore it using terraform import command.
+
+
+for example state file got to currepted or deleted, then what we need to do..?
+
+> first take the resource list
+
+> use "terraform import" command
+
+terraform import <RESOURCE_TYPE>.<RESOURCE_NAME> <RESOURCE_ID>
+
+if we execute the command create the state file.
+
+
+note:- TO avoid this kind of risk factor we have a option called "Remote state".
+
+commonly we are not mantain statefile in local mechine, we use cloud storage.
+
+for example multiple engineers are working in the same infrastructure, every one needs statefile for the further deployments, we are not able to share in every time because statefile can update every time , in this sichuvation we are using "Backend".
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+
+
+6. Backend:-
+------------
+
+it is a central storage.
+
+remote backend state file 
+
+ 
+(aquring state lock)
+
+here we are take S3+dynamoDB this is a secure combo with encrypted form if we try to deploy with the authentication go to to s3 then it will execute ,when two persons trying to deploy single time it will not support.
+
+
+terraform {
+  backend "s3" {
+    bucket         = "my-terraform-backend"   # S3 bucket name
+    key            = "state/terraform.tfstate" # Path in S3
+    region         = "us-east-1"              # AWS region
+    encrypt        = true                     # Encrypt the state file
+    dynamodb_table = "terraform-locks"        # Enable state locking
+  }
+}
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+resource "aws_instance" "my_ec2" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+}
+
+
+
+------------------------------------------------------------------------------------------------------
+
+
+5. provisioners :-
+-------------------
+
+provisioners provide the ability to run additional steps or tasks when a resource is created or destroyed.
+
+this is not a replacement for configuration management tools.
+
+Note:-
+------
+up to now we just follow like create main.tf file 
+
+
+basically if we have to deploy the infrastructure in single environment in this case we use the variables process, if we need to deploy the infrastructure in multiple environments like dev, QA, prod  in this case the best practice is modules process.
+
+variable approach.
+modular approach.
+
+------------------------------------------------------------------------------------------------------------------
+
+7. Modules:-
+-----------
+
+if you want to perform a template-based deployment you can follow modularized approach.
+
+A module defines a set of parameters which will be passed as key value pairs to actual deployment.
+
+with this approach you can create multiple environments in a very easy way.
+
+if we want to deploy infrastructure in all environments in single time.
+
+
+
+file structure
+---------------
+
+modules |_
+           main.tf , variable.tf.
+
+dev.tf
+
+prod.tf
+
+uat.tf
+
+
+example code 
+
+module "dev" {
+  source      = "./modules"
+  aws_region  = "us-east-1"
+  environment = "dev"
+  ami_id      = "ami-0c55b159cbfafe1f0" # Replace with your AMI ID
+  key_name    = "your-key-name"         # Replace with your SSH Key Name
+}
+
+
+go to working directory
+
+terraform init
+
+terraform plan
+
+terraform apply --auto-approve
+
+
+terraform autometically  create a statefile for every environment to maintain desired state..
+
+
+i need to destroy one specific environment.
+
+terraform destroy  == it will destroy all the environment
+
+we have a option called target in modular approach 
+
+terraform destroy --target=module.module name
+
+terraform destroy --target=module.module_prod
+
+terraform apply --target=module.module_prod
+
+when we create a new module again we should intilize the terraform
+
+terraform init
+
+
+----------------------------------------------------------------------------------------------------
+
+8. data sources:-
+----------------
+
+for example in previouly if we deploy the infrastructure from any cloud CLI or any cloud portals, those we need to use in terraform for that perpose we use  terraform data sources.
+
+
+Note:- their is another way that is we create state file for the existed resources. using import command.
+
+
+
+put a data block in the script
+
+insted of "resource" just put a "data"
+
+terraform init
+
+terraform plan = it will read all existed resources
+
+terraform apply = fetch the all the data of the resources, with that and create new resources.
+ 
+
+
+------------------------------------------------------------------------------------------------------------------
+
+Terraform Locals or Local Values:-
+---------------------------------
+
+is their any leanthy references will be use multiple times in the script, it will shows little clumgy so , we use locals block in thet local block just we put adderss of leanthy , then where we need to plase that just give the reference. 
+
+--------------------------------------------------------------------------------------------
+ 
+Terraform Import:- import resources to terraform state file.
+-----------------
+
+
+if our existed infrastructure deployed through any other CLIs or any other cloud protels, 
+clint move to terraform for Iac in that case i use the terraform import
+
+import the all existed information to terraform state file.
+
+use import commands
+
+if you run the command , it will check in the ports is it their are not, then it saved in state file,
+
+-------------------------------------------------------------------------------------------------------------
+
+ Terraform Functions:-(simplify your code) (reuseable code)
+--------------------
+In Terraform, functions are powerful tools that allow you to manipulate data, perform calculations, and dynamically generate configurations. 
+
+Here are some essential functions commonly used in Terraform:
+
+
+
+1. string functions
+
+2. math functions
+
+3. collection functions
+
+4. type conversion functions
+
+5. filesystem functions
+
+6. encoding functions
+
+7. logic function
+
+8. join 
+
+----------------------------------------------------------------------------------------------------------
+
+Terraform Provisioners :-   (file, local-exec & remote-exec)
+-----------------------
+
+
+In Terraform, a provisioner is used to execute scripts or commands on a local machine or a remote resource during resource creation or destruction. Provisioners help configure resources after they are created.
+
+
+it's like configuration management option.
+
+it will able to handle minimal of configuration ,it like optional future
+
+there  are 3 types of provisioners available in terraform.
+
+
+1. local-exec:-
+--------------- 
+
+Executes commands on the local machine where Terraform is running.
+
+
+
+resource "aws_instance" "example" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+
+  provisioner "local-exec" {
+    command = "echo Instance created: ${self.public_ip}"
+  }
+}
+
+
+
+Use Case:
+
+Triggering CI/CD pipelines.
+
+Sending notifications (e.g., Slack or email alerts).
+
+
+
+2. remote-exec:-
+---------------- 
+
+Executes commands on the remote resource (e.g., EC2 instance).
+
+
+resource "aws_instance" "example" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    private_key = file("~/.ssh/id_rsa")
+    host     = self.public_ip
+  }
+
+  provisioner "remote-exec" {
+    inline = [
+      "sudo apt-get update",
+      "sudo apt-get install nginx -y",
+    ]
+  }
+}
+
+
+Use Case:
+
+Installing packages (e.g., Nginx, Docker).
+
+Running setup scripts on cloud VMs.
+
+
+
+
+3. file:-
+-------- 
+
+Transfers files or directories from the local machine to a remote resource.
+
+
+resource "aws_instance" "example" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+
+  connection {
+    type     = "ssh"
+    user     = "ec2-user"
+    private_key = file("~/.ssh/id_rsa")
+    host     = self.public_ip
+  }
+
+  provisioner "file" {
+    source      = "app.conf"
+    destination = "/etc/nginx/nginx.conf"
+  }
+}
+
+
+
+Use Case:
+
+Uploading configuration files.
+
+Copying application code.
+
+
+
+4. destroy:-
+------------
+
+
+Runs commands when a resource is destroyed.
+
+
+
+resource "aws_instance" "example" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = "echo Instance destroyed: ${self.public_ip}"
+  }
+}
+
+
+Use Case:
+
+Cleanup tasks (deleting logs).
+
+Notifications on resource removal.
+
+
+
+ Best Practices:
+
+Avoid Overuse:-
+---------------
+Provisioners are a last resort. Prefer cloud-init, Ansible, or external tools.
+
+Idempotency:-
+-------------
+Ensure scripts can run multiple times without causing issues.
+
+Use when Condition:-
+--------------------
+Control execution (create, destroy, or always).
+
+------------------------------------------------------------------------------------------------------------------------------
+
+Terraform WorkSpaces:-    
+----------------------
+maintain state file for the different environment to different statefiles, like using single template
+
+
+maintain like a logical patrician. (Dev, QA, Prod)
+
+to manage multiple statefiles. (Dev, QA, Prod) 
+
+
+create new workapace 
+
+$ terraform workspace <name>
+
+$ terraform workspace dev
+
+$ terraform workspace prod
+
+$ terraform workspace Qa
+
+
+
+to see the existed workspaces
+
+$ terraform workspace list
+
+
+
+go into the workspace like dev, qa, prod
+
+$ terraform workspace select dev
+
+
+
+
+
+to see the current workspace 
+
+$ terraform workspace show 
+
+
+i want to apply dev environment
+
+$ terraform apply -var-file dev.tfvars
+
+
+
+then prod
+
+$ terraform workspace prod
+
+
+$ terraform apply -var-file prod.tfvars
+
+
+------------------------------------------------------------------------------------------------------------------------------------------------
+
+Terraform Meta-Arguments:-
+--------------------------
+
+
+In Terraform, meta-arguments are special arguments that can be used with resources, modules, and provisioners to control their behavior. These arguments are not specific to any provider and help with managing resource lifecycle, dependencies, counts, and more.
+
+
+Common Terraform Meta-Arguments:-
+--------------------------------
+
+1. count – Create multiple resource instances.
+
+
+resource "aws_instance" "web" {
+  count         = 3
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+  tags = {
+    Name = "web-${count.index}"
+  }
+}
+
+
+note:-
+-----
+
+${count.index} = interpolation, use this we can create dynamic names
+ 
+
+
+Explanation:
+
+This creates 3 EC2 instances.
+
+Each instance gets a unique Name (e.g., web-0, web-1, web-2).
+
+
+
+
+
+
+2. for_each – Iterate over a map or set of values to create multiple resources.
+
+
+resource "aws_instance" "web" {
+  for_each      = toset(["dev", "staging", "prod"])
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+  tags = {
+    Name = each.key
+  }
+}
+
+
+Explanation:
+
+Creates 3 EC2 instances with the names dev, staging, prod.
+
+Preferred over count when the items are unordered or need dynamic keys.
+
+
+
+
+3. depends_on – Define explicit dependencies between resources.
+
+
+resource "aws_s3_bucket" "bucket" {
+  bucket = "my-app-bucket"
+}
+
+resource "aws_instance" "web" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+
+  depends_on = [aws_s3_bucket.bucket]
+}
+
+
+ Explanation:
+
+Ensures the EC2 instance is created after the S3 bucket.
+
+Useful when implicit dependencies (via variables) are not enough.
+
+
+
+4. lifecycle – Customize resource management (e.g., prevent deletion).
+
+resource "aws_instance" "web" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+
+  lifecycle {
+    prevent_destroy = true
+    ignore_changes  = [tags]
+  }
+}
+
+
+Options in lifecycle:
+
+prevent_destroy: Stops accidental deletion of critical resources.
+
+ignore_changes: Ignores specified attribute changes.
+
+create_before_destroy: Ensures a new resource is created before the old one is destroyed.
+
+
+
+5. provider – Specify which provider to use for a resource.
+
+
+provider "aws" {
+  region = "us-east-1"
+}
+
+provider "aws" {
+  alias  = "west"
+  region = "us-west-1"
+}
+
+resource "aws_instance" "web" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+  provider      = aws.west
+}
+
+
+Explanation:
+
+Uses a specific AWS provider (us-west-1) for the resource.
+
+Required when you manage resources across multiple regions/accounts.
+
+
+
+
+6. timeouts – Control the time limit for resource operations.
+
+
+resource "aws_instance" "web" {
+  ami           = "ami-0c55b159cbfafe1f0"
+  instance_type = "t2.micro"
+
+  timeouts {
+    create = "30m"
+    delete = "20m"
+  }
+}
+
+
+Explanation:
+
+create: Maximum time to wait when creating the resource.
+
+delete: Maximum time to wait when deleting the resource.
+
+-----------------------------------------------------------------------------------------------------------------------------
